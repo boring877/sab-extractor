@@ -1,0 +1,20 @@
+[project]
+name = "sab-engine"
+version = "0.1.0"
+description = "Modular extraction engine for Silver and Blood workflows."
+requires-python = ">=3.10"
+dependencies = []
+
+[project.optional-dependencies]
+images = ["UnityPy"]
+capture = ["frida", "frida-tools"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]

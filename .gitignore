@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+output/
+engine/output/
+debug.log
+apps/desktop/dist/
+apps/desktop/node_modules/
