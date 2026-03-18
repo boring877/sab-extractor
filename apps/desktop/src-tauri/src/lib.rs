@@ -1,10 +1,16 @@
 use serde::{Deserialize, Serialize};
+use std::fs;
 use std::path::PathBuf;
 use std::process::Stdio;
 use std::sync::{Arc, Mutex};
 use tauri::Emitter;
 
-struct ActiveProcess(Arc<Mutex<Option<tokio::process::Child>>>);
+struct RunningProcess {
+    pid: u32,
+    output_dir: String,
+}
+
+struct ActiveProcess(Arc<Mutex<Option<RunningProcess>>>);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -64,6 +70,11 @@ fn build_python_args() -> Vec<String> {
     args
 }
 
+fn find_output_dir(args: &[String]) -> Option<String> {
+    let idx = args.iter().position(|a| a == "--output-dir")?;
+    args.get(idx + 1).cloned()
+}
+
 async fn run_engine_command(
     app: tauri::AppHandle,
     state: tauri::State<'_, ActiveProcess>,
@@ -75,6 +86,8 @@ async fn run_engine_command(
 
     let mut full_args = build_python_args();
     full_args.extend(extra_args);
+
+    let output_dir = find_output_dir(&full_args).unwrap_or_default();
 
     let cmd_str = format!("{} {}", python, full_args.join(" "));
     let _ = app.emit("extract:log", cmd_str);
@@ -147,17 +160,16 @@ async fn run_engine_command(
         });
     }
 
-    *state.0.lock().unwrap() = Some(child);
+    let pid = child.id().unwrap_or(0);
+    *state.0.lock().unwrap() = Some(RunningProcess {
+        pid,
+        output_dir: output_dir.clone(),
+    });
 
     let state_arc = state.0.clone();
     tokio::spawn(async move {
-        let child = {
-            let mut guard = state_arc.lock().unwrap();
-            guard.take()
-        };
-        if let Some(mut child) = child {
-            let _ = child.wait().await;
-        }
+        let _ = child.wait().await;
+        *state_arc.lock().unwrap() = None;
         let _ = app_clone_wait.emit(
             "extract:state",
             ExtractionState {
@@ -338,10 +350,20 @@ async fn extract_run_stories(
 
 #[tauri::command]
 async fn process_stop(state: tauri::State<'_, ActiveProcess>) -> Result<EngineResult, String> {
-    let mut guard = state.0.lock().unwrap();
-    match guard.take() {
-        Some(mut child) => {
-            let _ = child.start_kill();
+    let guard = state.0.lock().unwrap();
+    match guard.as_ref() {
+        Some(running) => {
+            if !running.output_dir.is_empty() {
+                let signal = PathBuf::from(&running.output_dir)
+                    .join(format!(".capture-stop-{}", running.pid));
+                if let Err(e) = fs::write(&signal, "") {
+                    return Ok(EngineResult {
+                        ok: false,
+                        error: Some(format!("Failed to write stop signal: {}", e)),
+                        exit_code: None,
+                    });
+                }
+            }
             Ok(EngineResult {
                 ok: true,
                 exit_code: None,
