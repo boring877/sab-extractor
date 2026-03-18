@@ -1,6 +1,6 @@
 [package]
 name = "sab-extractor"
-version = "0.3.1"
+version = "0.3.2"
 edition = "2021"
 
 [package.metadata.tauri]
