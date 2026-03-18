@@ -37,13 +37,7 @@ struct ExtractionState {
 }
 
 fn get_defaults() -> AppDefaults {
-    let workspace = std::env::current_dir()
-        .unwrap_or_else(|_| PathBuf::from("."))
-        .parent()
-        .and_then(|p| p.parent())
-        .unwrap_or(&PathBuf::from("."))
-        .to_path_buf();
-
+    let workspace = PathBuf::from("D:\\Silverandblood\\silver-and-blood-next");
     let engine = workspace.join("engine");
 
     AppDefaults {
