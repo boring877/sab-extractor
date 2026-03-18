@@ -250,6 +250,7 @@ struct CaptureOptions {
     process_name: Option<String>,
     probe_script: Option<String>,
     pid: Option<i32>,
+    #[allow(dead_code)]
     duration_seconds: Option<i32>,
 }
 

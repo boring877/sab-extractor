@@ -7,10 +7,10 @@ import LogPanel from "./components/LogPanel.jsx";
 import { useExtractionRunner } from "./hooks/useExtractionRunner.js";
 
 const TABS = [
-  { id: "capture", label: "CData Capture", icon: "\u{1F4CA}" },
-  { id: "extraction", label: "Image Extraction", icon: "\u{1F5BC}" },
-  { id: "stories", label: "Story Extraction", icon: "\u{1F4D6}" },
-  { id: "logs", label: "Run Logs", icon: "\u{1F4CB}" },
+  { id: "capture", label: "CData Capture" },
+  { id: "extraction", label: "Image Extraction" },
+  { id: "stories", label: "Story Extraction" },
+  { id: "logs", label: "Run Logs" },
 ];
 
 export default function App() {
@@ -72,7 +72,6 @@ export default function App() {
               className={`nav-item ${activeTab === tab.id ? "active" : ""}`}
               onClick={() => setActiveTab(tab.id)}
             >
-              <span className="nav-icon">{tab.icon}</span>
               {tab.label}
             </button>
           ))}
@@ -80,7 +79,6 @@ export default function App() {
 
         <div className="sidebar-footer">
           <div className="status-badge">
-            <span className={`status-dot ${statusClass()}`} />
             {statusLabel()}
           </div>
         </div>
@@ -89,7 +87,6 @@ export default function App() {
       <div className="main-content">
         <div className="content-header">
           <h2>
-            {TABS.find((t) => t.id === activeTab)?.icon}{" "}
             {TABS.find((t) => t.id === activeTab)?.label}
           </h2>
           <p>
