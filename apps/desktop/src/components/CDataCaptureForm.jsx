@@ -66,7 +66,7 @@ export default function CDataCaptureForm({
       <div className="actions-bar">
         {running ? (
           <button className="btn btn-danger" onClick={onRunCapture}>
-            Save
+            Stop Capture
           </button>
         ) : (
           <button className="btn btn-primary" onClick={onRunCapture} disabled={!canRunCapture}>

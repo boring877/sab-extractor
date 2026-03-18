@@ -1,10 +1,10 @@
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::process::Stdio;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use tauri::Emitter;
 
-struct ActiveProcess(Mutex<Option<tokio::process::Child>>);
+struct ActiveProcess(Arc<Mutex<Option<tokio::process::Child>>>);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -66,9 +66,10 @@ fn build_python_args() -> Vec<String> {
 
 async fn run_engine_command(
     app: tauri::AppHandle,
+    state: tauri::State<'_, ActiveProcess>,
     extra_args: Vec<String>,
     status_label: &str,
-) -> EngineResult {
+) -> Result<EngineResult, String> {
     let defaults = get_defaults();
     let python = std::env::var("PYTHON_EXE").unwrap_or_else(|_| "python".to_string());
 
@@ -90,7 +91,7 @@ async fn run_engine_command(
         .current_dir(&defaults.workspace_root)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
-        .creation_flags(0x08000000) // CREATE_NO_WINDOW on Windows
+        .creation_flags(0x08000000)
         .env("PYTHONUNBUFFERED", "1")
         .spawn();
 
@@ -104,11 +105,11 @@ async fn run_engine_command(
                     status: "Idle".to_string(),
                 },
             );
-            return EngineResult {
+            return Ok(EngineResult {
                 ok: false,
                 error: Some(format!("Failed to spawn process: {}", e)),
                 exit_code: None,
-            };
+            });
         }
     };
 
@@ -116,6 +117,7 @@ async fn run_engine_command(
     let stderr = child.stderr.take();
     let app_clone_stdout = app.clone();
     let app_clone_stderr = app.clone();
+    let app_clone_wait = app.clone();
 
     if let Some(stdout) = stdout {
         tokio::spawn(async move {
@@ -145,27 +147,31 @@ async fn run_engine_command(
         });
     }
 
-    let status = child.wait().await;
-    let _ = app.emit(
-        "extract:state",
-        ExtractionState {
-            running: false,
-            status: "Idle".to_string(),
-        },
-    );
+    *state.0.lock().unwrap() = Some(child);
 
-    match status {
-        Ok(s) => EngineResult {
-            ok: s.success(),
-            exit_code: Some(s.code().unwrap_or(1)),
-            error: None,
-        },
-        Err(e) => EngineResult {
-            ok: false,
-            exit_code: None,
-            error: Some(e.to_string()),
-        },
-    }
+    let state_arc = state.0.clone();
+    tokio::spawn(async move {
+        let child = {
+            let mut guard = state_arc.lock().unwrap();
+            guard.take()
+        };
+        if let Some(mut child) = child {
+            let _ = child.wait().await;
+        }
+        let _ = app_clone_wait.emit(
+            "extract:state",
+            ExtractionState {
+                running: false,
+                status: "Idle".to_string(),
+            },
+        );
+    });
+
+    Ok(EngineResult {
+        ok: true,
+        exit_code: None,
+        error: None,
+    })
 }
 
 #[derive(Debug, Deserialize)]
@@ -180,25 +186,26 @@ struct ImageExtractionOptions {
 #[tauri::command]
 async fn extract_run_image_extraction(
     app: tauri::AppHandle,
+    state: tauri::State<'_, ActiveProcess>,
     options: ImageExtractionOptions,
-) -> EngineResult {
+) -> Result<EngineResult, String> {
     let game_path = options.game_path.trim().to_string();
     let output_dir = options.output_dir.trim().to_string();
     let profile = options.profile.unwrap_or_else(|| "core".to_string());
 
     if game_path.is_empty() {
-        return EngineResult {
+        return Ok(EngineResult {
             ok: false,
             error: Some("Game path is required.".to_string()),
             exit_code: None,
-        };
+        });
     }
     if output_dir.is_empty() {
-        return EngineResult {
+        return Ok(EngineResult {
             ok: false,
             error: Some("Output directory is required.".to_string()),
             exit_code: None,
-        };
+        });
     }
 
     let mut args = vec![
@@ -221,7 +228,7 @@ async fn extract_run_image_extraction(
         }
     }
 
-    run_engine_command(app, args, "Running image extraction...").await
+    run_engine_command(app, state, args, "Running image extraction...").await
 }
 
 #[derive(Debug, Deserialize)]
@@ -235,16 +242,20 @@ struct CaptureOptions {
 }
 
 #[tauri::command]
-async fn capture_run_cdata(app: tauri::AppHandle, options: CaptureOptions) -> EngineResult {
+async fn capture_run_cdata(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, ActiveProcess>,
+    options: CaptureOptions,
+) -> Result<EngineResult, String> {
     let defaults = get_defaults();
     let output_dir = options.output_dir.trim().to_string();
 
     if output_dir.is_empty() {
-        return EngineResult {
+        return Ok(EngineResult {
             ok: false,
             error: Some("Output directory is required.".to_string()),
             exit_code: None,
-        };
+        });
     }
 
     let mut args = vec![
@@ -280,7 +291,7 @@ async fn capture_run_cdata(app: tauri::AppHandle, options: CaptureOptions) -> En
         }
     }
 
-    run_engine_command(app, args, "Running CData capture...").await
+    run_engine_command(app, state, args, "Running CData capture...").await
 }
 
 #[derive(Debug, Deserialize)]
@@ -291,23 +302,27 @@ struct StoryOptions {
 }
 
 #[tauri::command]
-async fn extract_run_stories(app: tauri::AppHandle, options: StoryOptions) -> EngineResult {
+async fn extract_run_stories(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, ActiveProcess>,
+    options: StoryOptions,
+) -> Result<EngineResult, String> {
     let game_path = options.game_path.trim().to_string();
     let output_dir = options.output_dir.trim().to_string();
 
     if game_path.is_empty() {
-        return EngineResult {
+        return Ok(EngineResult {
             ok: false,
             error: Some("Game path is required.".to_string()),
             exit_code: None,
-        };
+        });
     }
     if output_dir.is_empty() {
-        return EngineResult {
+        return Ok(EngineResult {
             ok: false,
             error: Some("Output directory is required.".to_string()),
             exit_code: None,
-        };
+        });
     }
 
     let args = vec![
@@ -318,12 +333,12 @@ async fn extract_run_stories(app: tauri::AppHandle, options: StoryOptions) -> En
         output_dir,
     ];
 
-    run_engine_command(app, args, "Running story extraction...").await
+    run_engine_command(app, state, args, "Running story extraction...").await
 }
 
 #[tauri::command]
-async fn process_stop(app: tauri::State<'_, ActiveProcess>) -> Result<EngineResult, String> {
-    let mut guard = app.0.lock().unwrap();
+async fn process_stop(state: tauri::State<'_, ActiveProcess>) -> Result<EngineResult, String> {
+    let mut guard = state.0.lock().unwrap();
     match guard.take() {
         Some(mut child) => {
             let _ = child.start_kill();
@@ -345,7 +360,7 @@ async fn process_stop(app: tauri::State<'_, ActiveProcess>) -> Result<EngineResu
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .manage(ActiveProcess(Mutex::new(None)))
+        .manage(ActiveProcess(Arc::new(Mutex::new(None))))
         .invoke_handler(tauri::generate_handler![
             app_get_defaults,
             extract_run_image_extraction,
