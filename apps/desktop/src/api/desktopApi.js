@@ -1,65 +1,44 @@
-export function getBridge() {
-  return window.sabDesktopApi || null;
-}
+import { invoke } from "@tauri-apps/api/core";
+import { open } from "@tauri-apps/plugin-dialog";
+import { listen } from "@tauri-apps/api/event";
 
 export async function getDefaults() {
-  const bridge = getBridge();
-  if (!bridge) return null;
-  return bridge.getDefaults();
+  return invoke("app_get_defaults");
 }
 
 export async function pickFolder() {
-  const bridge = getBridge();
-  if (!bridge) return null;
-  return bridge.pickFolder();
+  const result = await open({ directory: true, multiple: false });
+  return result || null;
 }
 
 export async function pickFile(options) {
-  const bridge = getBridge();
-  if (!bridge) return null;
-  return bridge.pickFile(options);
+  const result = await open({
+    multiple: false,
+    filters: Array.isArray(options?.filters) ? options.filters : undefined,
+  });
+  return result || null;
 }
 
 export async function runImageExtraction(payload) {
-  const bridge = getBridge();
-  if (!bridge) {
-    return { ok: false, error: "Desktop bridge unavailable." };
-  }
-  return bridge.runImageExtraction(payload);
+  return invoke("extract_run_image_extraction", { options: payload });
 }
 
 export async function runCDataCapture(payload) {
-  const bridge = getBridge();
-  if (!bridge) {
-    return { ok: false, error: "Desktop bridge unavailable." };
-  }
-  return bridge.runCDataCapture(payload);
+  return invoke("capture_run_cdata", { options: payload });
 }
 
 export async function runStoryExtraction(payload) {
-  const bridge = getBridge();
-  if (!bridge) {
-    return { ok: false, error: "Desktop bridge unavailable." };
-  }
-  return bridge.runStoryExtraction(payload);
+  return invoke("extract_run_stories", { options: payload });
 }
 
 export async function stopProcess() {
-  const bridge = getBridge();
-  if (!bridge) {
-    return { ok: false, error: "Desktop bridge unavailable." };
-  }
-  return bridge.stopProcess();
+  return invoke("process_stop");
 }
 
 export function subscribeExtractionLogs(handler) {
-  const bridge = getBridge();
-  if (!bridge) return () => {};
-  return bridge.onExtractionLog(handler);
+  return listen("extract:log", (event) => handler(event.payload));
 }
 
 export function subscribeExtractionState(handler) {
-  const bridge = getBridge();
-  if (!bridge) return () => {};
-  return bridge.onExtractionState(handler);
+  return listen("extract:state", (event) => handler(event.payload));
 }

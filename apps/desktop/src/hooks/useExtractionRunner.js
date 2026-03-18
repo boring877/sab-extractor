@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  getBridge,
   getDefaults,
   runCDataCapture,
   runImageExtraction,
@@ -68,17 +67,17 @@ export function useExtractionRunner() {
   }, []);
 
   const canRunImage = useMemo(
-    () => Boolean(getBridge()) && !running && gamePath.trim() && imageOutputDir.trim(),
+    () => !running && gamePath.trim() && imageOutputDir.trim(),
     [running, gamePath, imageOutputDir]
   );
 
   const canRunCapture = useMemo(
-    () => Boolean(getBridge()) && !running && captureOutputDir.trim(),
+    () => !running && captureOutputDir.trim(),
     [running, captureOutputDir]
   );
 
   const canRunStory = useMemo(
-    () => Boolean(getBridge()) && !running && gamePath.trim() && storyOutputDir.trim(),
+    () => !running && gamePath.trim() && storyOutputDir.trim(),
     [running, gamePath, storyOutputDir]
   );
 
