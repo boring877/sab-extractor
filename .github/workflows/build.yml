@@ -1,4 +1,4 @@
-name: Build Electron App
+name: Build Tauri App
 
 on:
   push:
@@ -16,22 +16,24 @@ jobs:
         with:
           node-version: 20
 
-      - name: Install dependencies
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install frontend dependencies
         run: npm ci
         working-directory: apps/desktop
 
-      - name: Build
-        run: npm run dist
+      - name: Build Tauri app
+        run: npm run tauri:build
         working-directory: apps/desktop
 
       - name: Upload installer
         uses: actions/upload-artifact@v4
         with:
-          name: SAB-Extractor-Setup
-          path: apps/desktop/dist/*.exe
+          name: SAB-Data-Extractor-Setup
+          path: apps/desktop/src-tauri/target/release/bundle/nsis/*.exe
 
       - name: Release
         uses: softprops/action-gh-release@v2
         with:
-          files: apps/desktop/dist/*.exe
+          files: apps/desktop/src-tauri/target/release/bundle/nsis/*.exe
           generate_release_notes: true
